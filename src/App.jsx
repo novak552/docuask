@@ -156,7 +156,7 @@ export default function DocumentAI() {
         body: JSON.stringify({
           model: "claude-sonnet-4-5",
           max_tokens: 1000,
-          system: "You are a precise document assistant. Answer questions based solely on the provided document. Be clear and concise. If the answer is not in the document, say so. Use plain text only — no markdown formatting.",
+          system: "You are a precise document assistant. Answer questions based solely on the provided document. Be clear and concise. If the answer is not in the document, say so. Always respond in the same language the user used to ask the question, regardless of the document language.",
           messages: [{ role: "user", content: userContent }],
         }),
       });
