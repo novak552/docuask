@@ -96,16 +96,61 @@ export default function DocumentAI() {
   const [loading, setLoading] = useState(false);
   const [dragOver, setDragOver] = useState(false);
   const [error, setError] = useState(null);
-  const fileRef = useRef();
-  const bottomRef = useRef();
+
   const [session, setSession] = useState(null);
   const [email, setEmail] = useState("");
   const [authLoading, setAuthLoading] = useState(true);
   const [authMessage, setAuthMessage] = useState("");
 
+  const fileRef = useRef();
+  const bottomRef = useRef();
+
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, loading]);
+
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data }) => {
+      setSession(data.session);
+      setAuthLoading(false);
+    });
+
+    const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
+      setSession(session);
+      setAuthLoading(false);
+    });
+
+    return () => {
+      listener.subscription.unsubscribe();
+    };
+  }, []);
+
+  const signIn = async (e) => {
+    e.preventDefault();
+    setAuthMessage("");
+    setError(null);
+
+    const { error } = await supabase.auth.signInWithOtp({
+      email,
+      options: {
+        emailRedirectTo: window.location.origin,
+      },
+    });
+
+    if (error) {
+      setAuthMessage(error.message);
+    } else {
+      setAuthMessage("Check your email for the login link.");
+    }
+  };
+
+  const signOut = async () => {
+    await supabase.auth.signOut();
+    setDoc(null);
+    setMessages([]);
+    setInput("");
+    setError(null);
+  };
 
   const processFile = useCallback((file) => {
     if (!file) return;
@@ -141,6 +186,14 @@ export default function DocumentAI() {
   }, [processFile]);
 
   const ask = async (question) => {
+    if (!session) {
+      setError("Please sign in first.");
+      return;
+    }
+    if (!doc) {
+      setError("Please upload a document first.");
+      return;
+    }
     if (!question.trim() || loading) return;
     setInput("");
     setError(null);
@@ -155,22 +208,37 @@ export default function DocumentAI() {
           ]
         : `Document: "${doc.name}"\n\n${doc.content}\n\n---\n\nQuestion: ${question}`;
 
+      const { data: sessionData } = await supabase.auth.getSession();
+      const accessToken = sessionData.session?.access_token;
+
+      if (!accessToken) {
+        throw new Error("Missing Supabase session token");
+      }
+
       const res = await fetch("/api/chat", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${accessToken}`,
+        },
         body: JSON.stringify({
-          model: "claude-sonnet-4-5",
+          model: "claude-sonnet-4-20250514",
           max_tokens: 1000,
-          system: "You are a precise document assistant. Answer questions based solely on the provided document. Be clear and concise. If the answer is not in the document, say so. Always respond in the same language the user used to ask the question, regardless of the document language.",
+          system: "You are a precise document assistant. Answer questions based solely on the provided document. Be clear and concise. If the answer is not in the document, say so. Use plain text only — no markdown formatting.",
           messages: [{ role: "user", content: userContent }],
         }),
       });
 
       const data = await res.json();
+
+      if (!res.ok) {
+        throw new Error(data.error || "AI request failed");
+      }
+
       const answer = data.content?.[0]?.text ?? "Sorry, I couldn't generate a response.";
       setMessages((prev) => [...prev, { role: "assistant", content: answer }]);
-    } catch {
-      setError("Request failed. Check your connection and try again.");
+    } catch (err) {
+      setError(err.message || "Request failed. Check your connection and try again.");
     }
     setLoading(false);
   };
@@ -182,13 +250,76 @@ export default function DocumentAI() {
   return (
     <>
       <style>{styles}</style>
+
+      {authLoading ? (
+        <div className="app">
+          <header className="header">
+            <div className="logo-wrap">
+              <div className="logo-icon" />
+              <span className="logo">Docu.ask</span>
+            </div>
+            <span className="header-badge">Loading</span>
+          </header>
+          <div className="rainbow-bar" />
+          <div className="empty-state">
+            <div className="empty-title">Loading...</div>
+          </div>
+        </div>
+      ) : !session ? (
+        <div className="app">
+          <header className="header">
+            <div className="logo-wrap">
+              <div className="logo-icon" />
+              <span className="logo">Docu.ask</span>
+            </div>
+            <span className="header-badge">Sign in</span>
+          </header>
+
+          <div className="rainbow-bar" />
+
+          <form onSubmit={signIn} className="upload-zone">
+            <div className="upload-inner">
+              <span className="upload-emoji">🔐</span>
+              <div className="upload-title">Sign in to use Docu.ask</div>
+              <div className="upload-sub">Enter your email and we will send you a login link.</div>
+
+              <div style={{ marginTop: "1.5rem", display: "flex", gap: "8px", justifyContent: "center" }}>
+                <input
+                  className="q-input"
+                  style={{ maxWidth: "320px" }}
+                  type="email"
+                  placeholder="your@email.com"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  required
+                />
+                <button className="send-btn" type="submit" aria-label="Sign in">
+                  <span>→</span>
+                </button>
+              </div>
+
+              {authMessage && (
+                <div style={{ marginTop: "1rem", fontSize: "0.85rem", color: "#666" }}>
+                  {authMessage}
+                </div>
+              )}
+            </div>
+          </form>
+        </div>
+      ) : (
       <div className="app">
         <header className="header">
           <div className="logo-wrap">
             <div className="logo-icon" />
             <span className="logo">Docu.ask</span>
           </div>
-          <span className="header-badge">AI Assistant</span>
+          <button
+            className="header-badge"
+            onClick={signOut}
+            style={{ border: "none", cursor: "pointer" }}
+          >
+            Sign out
+          </button>
         </header>
 
         <div className="rainbow-bar" />
@@ -286,6 +417,7 @@ export default function DocumentAI() {
           </>
         )}
       </div>
+      )}
     </>
   );
 }
