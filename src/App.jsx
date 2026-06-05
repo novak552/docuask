@@ -154,7 +154,7 @@ export default function DocumentAI() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          model: "claude-sonnet-4-20250514",
+          model: "claude-sonnet-4-5",
           max_tokens: 1000,
           system: "You are a precise document assistant. Answer questions based solely on the provided document. Be clear and concise. If the answer is not in the document, say so. Use plain text only — no markdown formatting.",
           messages: [{ role: "user", content: userContent }],
