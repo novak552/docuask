@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from "react";
+import { supabase } from "./supabaseClient";
 
 const RAINBOW = "linear-gradient(90deg, #FF6B6B, #FF8E53, #FFD93D, #6BCB77, #4D96FF, #9B59B6)";
 
@@ -97,6 +98,10 @@ export default function DocumentAI() {
   const [error, setError] = useState(null);
   const fileRef = useRef();
   const bottomRef = useRef();
+  const [session, setSession] = useState(null);
+  const [email, setEmail] = useState("");
+  const [authLoading, setAuthLoading] = useState(true);
+  const [authMessage, setAuthMessage] = useState("");
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
